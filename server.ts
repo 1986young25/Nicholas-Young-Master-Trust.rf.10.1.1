@@ -4,6 +4,16 @@ import cors from "cors";
 import dotenv from "dotenv";
 import { GoogleGenAI, ThinkingLevel, Type } from "@google/genai";
 import { createServer as createViteServer } from "vite";
+import { requireAuth, AuthRequest } from "./src/middleware/auth.ts";
+import { 
+  getOrCreateUser, 
+  getJobsByUser, 
+  createJob, 
+  getCandidatesByJob, 
+  createCandidate, 
+  updateCandidateStatus, 
+  updateCandidateRating 
+} from "./src/db/queries.ts";
 
 dotenv.config();
 
@@ -191,6 +201,145 @@ app.post("/api/chat/message", async (req, res) => {
   } catch (error: any) {
     console.error("Gemini Chatbot API Error:", error);
     res.status(500).json({ error: error.message || "An error occurred during interactive chat." });
+  }
+});
+
+// --- Cloud SQL Database API Routes ---
+
+// 1. Sync User Session
+app.post("/api/db/users/sync", requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const uid = req.user?.uid;
+    const email = req.user?.email || "";
+    if (!uid) {
+      return res.status(401).json({ error: "Missing user identity from token." });
+    }
+    const syncedUser = await getOrCreateUser(uid, email);
+    res.json(syncedUser);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 2. Fetch Jobs for current user
+app.get("/api/db/jobs", requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const uid = req.user?.uid;
+    if (!uid) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+    const jobsList = await getJobsByUser(uid);
+    res.json(jobsList);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 3. Create Job Opening
+app.post("/api/db/jobs", requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const uid = req.user?.uid;
+    if (!uid) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+    const { id, title, requirements, description } = req.body;
+    if (!id || !title || !requirements || !description) {
+      return res.status(400).json({ error: "Missing required fields for job creation." });
+    }
+    const newJob = await createJob(id, title, requirements, description, uid);
+    res.json(newJob);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 4. Fetch Candidates for a Job
+app.get("/api/db/candidates", requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const uid = req.user?.uid;
+    if (!uid) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+    const { jobId } = req.query;
+    if (!jobId || typeof jobId !== "string") {
+      return res.status(400).json({ error: "Missing or invalid jobId parameter." });
+    }
+    const list = await getCandidatesByJob(jobId, uid);
+    res.json(list);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 5. Create Candidate screening scorecard
+app.post("/api/db/candidates", requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const uid = req.user?.uid;
+    if (!uid) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+    const {
+      id, name, email, phone, skills, yearsOfExperience,
+      overallScore, matchAnalysis, experienceSummary, feedback, status, rating, jobId
+    } = req.body;
+
+    if (!id || !name || !email || !jobId) {
+      return res.status(400).json({ error: "Missing mandatory fields for candidate registration." });
+    }
+
+    const newCandidate = await createCandidate({
+      id, name, email, phone: phone || "", skills: skills || [],
+      yearsOfExperience: Number(yearsOfExperience || 0),
+      overallScore: Number(overallScore || 0),
+      matchAnalysis: matchAnalysis || "",
+      experienceSummary: experienceSummary || "",
+      feedback: feedback || "",
+      status: status || "Screened",
+      rating: Number(rating || 3),
+      jobId, ownerId: uid
+    });
+
+    res.json(newCandidate);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 6. Update Candidate Status
+app.patch("/api/db/candidates/:id/status", requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const uid = req.user?.uid;
+    if (!uid) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+    const { id } = req.params;
+    const { status } = req.body;
+    if (!status) {
+      return res.status(400).json({ error: "status is required." });
+    }
+    const updated = await updateCandidateStatus(id, status, uid);
+    res.json(updated);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 7. Update Candidate Rating
+app.patch("/api/db/candidates/:id/rating", requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const uid = req.user?.uid;
+    if (!uid) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+    const { id } = req.params;
+    const { rating } = req.body;
+    if (rating === undefined) {
+      return res.status(400).json({ error: "rating is required." });
+    }
+    const updated = await updateCandidateRating(id, Number(rating), uid);
+    res.json(updated);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
   }
 });
 
