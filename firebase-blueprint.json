@@ -1,0 +1,70 @@
+{
+  "entities": {
+    "JobDescription": {
+      "title": "JobDescription",
+      "description": "Details about a hiring role/opening",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "requirements": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "ownerId": { "type": "string" }
+      },
+      "required": ["id", "title", "description", "ownerId"]
+    },
+    "CandidateEvaluation": {
+      "title": "CandidateEvaluation",
+      "description": "Evaluated candidate profile with scores and screening status",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "phone": { "type": "string" },
+        "skills": { "type": "array" },
+        "yearsOfExperience": { "type": "number" },
+        "overallScore": { "type": "number" },
+        "matchAnalysis": { "type": "string" },
+        "experienceSummary": { "type": "string" },
+        "status": { "type": "string" },
+        "rating": { "type": "number" },
+        "feedback": { "type": "string" },
+        "driveFileId": { "type": "string" },
+        "jobId": { "type": "string" },
+        "ownerId": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "name", "ownerId", "jobId", "overallScore", "status"]
+    },
+    "CandidateChat": {
+      "title": "CandidateChat",
+      "description": "Multi-turn chat threads about specific candidates",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "candidateId": { "type": "string" },
+        "messages": { "type": "array" },
+        "ownerId": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "candidateId", "messages", "ownerId"]
+    }
+  },
+  "firestore": {
+    "/job_descriptions/{jobId}": {
+      "schema": "JobDescription",
+      "description": "Job descriptions owned by the user"
+    },
+    "/candidates/{candidateId}": {
+      "schema": "CandidateEvaluation",
+      "description": "Evaluated candidates connected to jobs"
+    },
+    "/chats/{chatId}": {
+      "schema": "CandidateChat",
+      "description": "Hiring chats exploring candidate suitability"
+    }
+  }
+}

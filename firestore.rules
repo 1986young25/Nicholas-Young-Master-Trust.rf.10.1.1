@@ -1,0 +1,97 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Global Safetynet (default deny)
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Reuseable hardened global helpers
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(ownerId) {
+      return isSignedIn() && request.auth.uid == ownerId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // Strict validation for JobDescription
+    function isValidJobDescription(data) {
+      return data.keys().hasAll(['id', 'title', 'description', 'ownerId']) 
+        && data.keys().size() <= 6
+        && data.id is string && data.id.size() <= 128
+        && data.title is string && data.title.size() <= 200
+        && data.description is string && data.description.size() <= 10000
+        && data.ownerId == request.auth.uid;
+    }
+
+    // Strict validation for CandidateEvaluation
+    function isValidCandidateEvaluation(data) {
+      return data.keys().hasAll(['id', 'name', 'ownerId', 'jobId', 'overallScore', 'status'])
+        && data.keys().size() <= 17
+        && data.id is string && data.id.size() <= 128
+        && data.name is string && data.name.size() <= 100
+        && data.ownerId == request.auth.uid
+        && data.jobId is string && data.jobId.size() <= 128
+        && (data.overallScore is int || data.overallScore is number) && data.overallScore >= 0 && data.overallScore <= 100
+        && data.status is string && (data.status == 'Screened' || data.status == 'Shortlisted' || data.status == 'Interviewing' || data.status == 'Offered' || data.status == 'Rejected' || data.status == 'Draft')
+        && (!data.keys().contains('email') || (data.email is string && data.email.size() <= 128))
+        && (!data.keys().contains('phone') || (data.phone is string && data.phone.size() <= 50))
+        && (!data.keys().contains('skills') || (data.skills is list && data.skills.size() <= 50))
+        && (!data.keys().contains('yearsOfExperience') || (data.yearsOfExperience is number))
+        && (!data.keys().contains('matchAnalysis') || (data.matchAnalysis is string && data.matchAnalysis.size() <= 20000))
+        && (!data.keys().contains('experienceSummary') || (data.experienceSummary is string && data.experienceSummary.size() <= 10000))
+        && (!data.keys().contains('rating') || (data.rating is int || data.rating is number) && data.rating >= 1 && data.rating <= 5)
+        && (!data.keys().contains('feedback') || (data.feedback is string && data.feedback.size() <= 10000))
+        && (!data.keys().contains('driveFileId') || (data.driveFileId is string && data.driveFileId.size() <= 128));
+    }
+
+    // Strict validation for CandidateChat
+    function isValidCandidateChat(data) {
+      return data.keys().hasAll(['id', 'candidateId', 'messages', 'ownerId'])
+        && data.keys().size() <= 6
+        && data.id is string && data.id.size() <= 128
+        && data.candidateId is string && data.candidateId.size() <= 128
+        && data.ownerId == request.auth.uid
+        && data.messages is list && data.messages.size() <= 200;
+    }
+
+    // Collection Security
+    match /job_descriptions/{jobId} {
+      allow get: if isOwner(existing().ownerId);
+      allow list: if isSignedIn() && resource.data.ownerId == request.auth.uid;
+      allow create: if isSignedIn() && isValidId(jobId) && isValidJobDescription(incoming()) && incoming().id == jobId;
+      allow update: if isSignedIn() && isValidJobDescription(incoming()) && incoming().ownerId == existing().ownerId && incoming().id == existing().id;
+      allow delete: if isOwner(existing().ownerId);
+    }
+
+    match /candidates/{candidateId} {
+      allow get: if isOwner(existing().ownerId);
+      allow list: if isSignedIn() && resource.data.ownerId == request.auth.uid;
+      allow create: if isSignedIn() && isValidId(candidateId) && isValidCandidateEvaluation(incoming()) && incoming().id == candidateId;
+      allow update: if isSignedIn() && isValidCandidateEvaluation(incoming()) && incoming().ownerId == existing().ownerId && incoming().id == existing().id;
+      allow delete: if isOwner(existing().ownerId);
+    }
+
+    match /chats/{chatId} {
+      allow get: if isOwner(existing().ownerId);
+      allow list: if isSignedIn() && resource.data.ownerId == request.auth.uid;
+      allow create: if isSignedIn() && isValidId(chatId) && isValidCandidateChat(incoming()) && incoming().id == chatId;
+      allow update: if isSignedIn() && isValidCandidateChat(incoming()) && incoming().ownerId == existing().ownerId && incoming().id == existing().id;
+      allow delete: if isOwner(existing().ownerId);
+    }
+  }
+}

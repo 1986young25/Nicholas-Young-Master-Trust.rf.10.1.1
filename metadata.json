@@ -1,0 +1,6 @@
+{
+  "name": "Candidate Screening and Filtering Portal",
+  "description": "A hiring tool connected to Google Drive to scan developer resumes, evaluate profiles using Gemini, and filter candidates by scores, experience, and custom ratings.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
